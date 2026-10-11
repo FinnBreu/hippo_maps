@@ -13,8 +13,8 @@ class OccupancyGridGeneratorTest(unittest.TestCase):
     def test_byte_states_and_indexing(self):
         grid = maps.VoxelGrid([0, 0, 0], [4, 1, 1], 1)
         grid.states[0, 0] = [maps.UNKNOWN, maps.FREE,
-                              maps.OCCUPIED, maps.UNKNOWN]
-        self.assertEqual(grid.states.ravel().tolist(), [0, 1, 2, 0])
+                              maps.OCCUPIED, maps.BUFFER]
+        self.assertEqual(grid.states.ravel().tolist(), [0, 1, 2, 3])
         self.assertEqual(grid.state_at([2.5, 0.5, 0.5]), maps.OCCUPIED)
         with self.assertRaises(ValueError):
             grid.index([4, 0, 0])
@@ -53,6 +53,26 @@ class OccupancyGridGeneratorTest(unittest.TestCase):
                 self.assertEqual(int(saved['format_version']), 2)
                 self.assertEqual(saved['data'].size, grid.states.size)
 
+    def test_buffer_expands_obstacles_by_configured_distance(self):
+        config = {'position_min': [0, 0, 0],
+                  'position_max': [0.5, 0.5, 0.5],
+                  'resolution_per_meter': 10,
+                  'buffer_distance': 0.11,
+                  'obstacles': [{'type': 'sphere',
+                                 'center': [0.25, 0.25, 0.25],
+                                 'radius': 0.001}]}
+        grid = maps.generate(config)
+        self.assertEqual(grid.state_at([0.25, 0.25, 0.25]), maps.OCCUPIED)
+        self.assertEqual(grid.state_at([0.35, 0.25, 0.25]), maps.BUFFER)
+        self.assertEqual(grid.state_at([0.35, 0.35, 0.25]), maps.FREE)
+        self.assertEqual(grid.state_at([0.45, 0.25, 0.25]), maps.FREE)
+        config['buffer_distance'] = 0.0
+        self.assertEqual(maps.generate(config).state_at([0.35, 0.25, 0.25]),
+                         maps.FREE)
+        config['buffer_distance'] = -0.1
+        with self.assertRaisesRegex(ValueError, 'buffer_distance'):
+            maps.generate(config)
+
     def test_reserved_codes_and_legacy_map(self):
         grid = maps.VoxelGrid([0, 0, 0], [4, 1, 1], 1,
                               default_state=maps.OCCUPIED)
@@ -61,8 +81,8 @@ class OccupancyGridGeneratorTest(unittest.TestCase):
                         'position_max': [2, 1, 1], 'state': maps.FREE})
         self.assertEqual(grid.state_at([1.5, 0.5, 0.5]), maps.FREE)
         with self.assertRaises(ValueError):
-            maps.state_code(3)
-        grid.states[0, 0, 0] = 3
+            maps.state_code(4)
+        grid.states[0, 0, 0] = 4
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'old.npz'
             with self.assertRaisesRegex(ValueError, 'reserved'):
@@ -70,9 +90,9 @@ class OccupancyGridGeneratorTest(unittest.TestCase):
             np.savez_compressed(path, position_min=[0, 0, 0],
                                 position_max=[4, 1, 1],
                                 resolution_per_meter=1, frame_id='map',
-                                data=np.array([0x24], dtype=np.uint8))
+                                data=np.array([0xE4], dtype=np.uint8))
             loaded = maps.VoxelGrid.load(path)
-            self.assertEqual(loaded.states.ravel().tolist(), [0, 1, 2, 0])
+            self.assertEqual(loaded.states.ravel().tolist(), [0, 1, 2, 3])
 
 
 if __name__ == '__main__':

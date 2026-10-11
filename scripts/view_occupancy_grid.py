@@ -3,7 +3,7 @@
 
 import argparse
 
-from occupancy_grid import (OCCUPIED, UNKNOWN, load_colors, load_npz,
+from occupancy_grid import (BUFFER, OCCUPIED, UNKNOWN, load_colors, load_npz,
                             visible_voxels)
 
 
@@ -33,7 +33,9 @@ def make_figure(path, show_unknown=False, max_points=40000):
     ax.set_zlim(lower[2], upper[2])
     ax.set_box_aspect(upper - lower)
     legend = [Line2D([0], [0], color=display_color(OCCUPIED),
-                     marker='s', linestyle='', label='Occupied')]
+                     marker='s', linestyle='', label='Occupied'),
+              Line2D([0], [0], color=display_color(BUFFER),
+                     marker='s', linestyle='', label='Buffer')]
     if show_unknown:
         legend.append(Line2D([0], [0], color=display_color(UNKNOWN), marker='s',
                              linestyle='', label='Unknown'))

@@ -7,10 +7,12 @@ geometry_msgs/Point position_max
 # Positive, uniform number of voxels per metre on all three axes.
 uint32 resolution_per_meter
 
-# Byte state codes. Values 3..255 are reserved for future use.
+# Byte state codes. Values 4..255 are reserved for future use.
 uint8 UNKNOWN=0
 uint8 FREE=1
 uint8 OCCUPIED=2
+# Clearance around occupied cells; guidance treats this as blocked.
+uint8 BUFFER=3
 
 # One state byte per voxel.
 # Derive nx, ny, nz by taking ceil((position_max - position_min) *

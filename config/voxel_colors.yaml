@@ -13,3 +13,7 @@ occupied:
   rgb: [120, 80, 180]
   foxglove_alpha: 150
   viewer_alpha: 0.75
+buffer:
+  rgb: [155, 125, 195]
+  foxglove_alpha: 120
+  viewer_alpha: 0.35

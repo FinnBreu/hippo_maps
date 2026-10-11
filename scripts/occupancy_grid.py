@@ -3,8 +3,8 @@
 import numpy as np
 
 
-UNKNOWN, FREE, OCCUPIED = range(3)
-STATE_NAMES = ('unknown', 'free', 'occupied')
+UNKNOWN, FREE, OCCUPIED, BUFFER = range(4)
+STATE_NAMES = ('unknown', 'free', 'occupied', 'buffer')
 MAX_VOXELS = 50_000_000
 
 
@@ -23,7 +23,7 @@ def load_colors(path=None):
     except yaml.YAMLError as error:
         raise ValueError(f'invalid voxel color YAML: {error}') from error
     if not isinstance(config, dict) or set(config) != set(STATE_NAMES):
-        raise ValueError('voxel colors must define unknown, free, and occupied')
+        raise ValueError('voxel colors must define unknown, free, occupied, and buffer')
     colors = {}
     for state, name in enumerate(STATE_NAMES):
         entry = config[name]
@@ -78,7 +78,7 @@ def unpack(position_min, position_max, resolution_per_meter, data,
             raise ValueError('unused bits in the final byte must be zero')
     else:
         raise ValueError(f'unsupported map format version: {format_version}')
-    if np.any(states > OCCUPIED):
+    if np.any(states > BUFFER):
         raise ValueError('grid contains reserved voxel states')
     nx, ny, nz = dimensions
     return lower, upper, int(resolution_per_meter), states.reshape((nz, ny, nx))
@@ -109,7 +109,7 @@ def visible_voxels(lower, upper, resolution, states, show_unknown=False,
                    max_points=None):
     """Return voxel centres and state codes; x varies fastest."""
     flat = states.ravel()
-    visible = flat == OCCUPIED
+    visible = (flat == OCCUPIED) | (flat == BUFFER)
     if show_unknown:
         visible |= flat == UNKNOWN
     indices = np.flatnonzero(visible)

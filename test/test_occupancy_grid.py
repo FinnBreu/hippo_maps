@@ -8,7 +8,7 @@ import numpy as np
 from hippo_maps.msg import OccupancyGrid3D
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from occupancy_grid import (OCCUPIED, load_colors, unpack_message,
+from occupancy_grid import (BUFFER, OCCUPIED, load_colors, unpack_message,
                             visible_voxels)
 from occupancy_grid_bridge import to_voxel_grid
 
@@ -21,12 +21,13 @@ class OccupancyGridVisualizationTest(unittest.TestCase):
         message.position_max.y = 2.0
         message.position_max.z = 1.0
         message.resolution_per_meter = 1
-        # x fastest: unknown, free, occupied, unknown.
-        message.data = [0, 1, 2, 0]
+        # x fastest: unknown, free, occupied, buffer.
+        message.data = [0, 1, 2, 3]
         lower, upper, resolution, states = unpack_message(message)
         centres, codes = visible_voxels(lower, upper, resolution, states)
-        np.testing.assert_array_equal(codes, [OCCUPIED])
-        np.testing.assert_allclose(centres, [[0.5, 1.5, 0.5]])
+        np.testing.assert_array_equal(codes, [OCCUPIED, BUFFER])
+        np.testing.assert_allclose(centres, [[0.5, 1.5, 0.5],
+                                             [1.5, 1.5, 0.5]])
 
     def test_rejects_bad_data_length(self):
         message = OccupancyGrid3D()
@@ -42,7 +43,7 @@ class OccupancyGridVisualizationTest(unittest.TestCase):
         message.position_max.x = message.position_max.y = \
             message.position_max.z = 1
         message.resolution_per_meter = 1
-        message.data = [3]
+        message.data = [4]
         with self.assertRaisesRegex(ValueError, 'reserved'):
             unpack_message(message)
 
@@ -56,7 +57,7 @@ class OccupancyGridVisualizationTest(unittest.TestCase):
         message.position_max.y = 2.0
         message.position_max.z = 0.0
         message.resolution_per_meter = 1
-        message.data = [0, 1, 2, 0]
+        message.data = [0, 1, 2, 3]
         grid = to_voxel_grid(message)
         self.assertEqual((grid.column_count, grid.row_count), (2, 2))
         self.assertEqual((grid.cell_stride, grid.row_stride,
@@ -66,9 +67,11 @@ class OccupancyGridVisualizationTest(unittest.TestCase):
         self.assertEqual([field.name for field in grid.fields],
                          ['state', 'red', 'green', 'blue', 'alpha'])
         cells = np.frombuffer(grid.data, dtype=np.uint8).reshape(4, 5)
-        np.testing.assert_array_equal(cells[:, 0], [0, 1, 2, 0])
+        np.testing.assert_array_equal(cells[:, 0], [0, 1, 2, 3])
         palette = load_colors()
         np.testing.assert_array_equal(cells[2, 1:4], palette[OCCUPIED][0])
+        np.testing.assert_array_equal(cells[3, 1:4], palette[BUFFER][0])
+        self.assertLess(cells[3, 4], cells[2, 4])
         np.testing.assert_array_equal(
             cells[:, 4], [palette[state][1] for state in message.data])
 
@@ -78,6 +81,7 @@ class OccupancyGridVisualizationTest(unittest.TestCase):
             path.write_text('''unknown: {rgb: [1, 2, 3], foxglove_alpha: 0, viewer_alpha: 0.5}
 free: {rgb: [4, 5, 6], foxglove_alpha: 0, viewer_alpha: 0.0}
 occupied: {rgb: [10, 20, 30], foxglove_alpha: 40, viewer_alpha: 0.7}
+buffer: {rgb: [15, 25, 35], foxglove_alpha: 20, viewer_alpha: 0.3}
 ''')
             message = OccupancyGrid3D()
             message.position_max.x = message.position_max.y = \

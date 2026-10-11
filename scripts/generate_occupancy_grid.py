@@ -9,8 +9,9 @@ from pathlib import Path
 import numpy as np
 
 
-UNKNOWN, FREE, OCCUPIED = range(3)
-STATE_NAMES = {'unknown': UNKNOWN, 'free': FREE, 'occupied': OCCUPIED}
+UNKNOWN, FREE, OCCUPIED, BUFFER = range(4)
+STATE_NAMES = {'unknown': UNKNOWN, 'free': FREE, 'occupied': OCCUPIED,
+               'buffer': BUFFER}
 MAX_VOXELS = 50_000_000
 FORMAT_VERSION = 2
 
@@ -19,9 +20,9 @@ def state_code(value):
     if isinstance(value, str) and value in STATE_NAMES:
         return STATE_NAMES[value]
     if isinstance(value, (int, np.integer)) and not isinstance(value, bool) \
-            and 0 <= value <= OCCUPIED:
+            and 0 <= value <= BUFFER:
         return int(value)
-    raise ValueError('state must be unknown, free, occupied, or an integer from 0 to 2')
+    raise ValueError('state must be unknown, free, occupied, buffer, or an integer from 0 to 3')
 
 
 def vector(value, name):
@@ -157,8 +158,20 @@ class VoxelGrid:
                   (radial + half_diagonal >= inner)
         self.states[z[hit], y[hit], x[hit]] = state
 
+    def add_buffer(self, distance):
+        """Mark free voxel centres within distance metres of occupied centres."""
+        distance = positive(distance, 'buffer_distance', allow_zero=True)
+        if distance == 0 or not np.any(self.states == OCCUPIED):
+            return
+        from scipy.ndimage import distance_transform_edt
+        distance_to_occupied = distance_transform_edt(
+            self.states != OCCUPIED,
+            sampling=1.0 / self.resolution_per_meter)
+        self.states[(self.states == FREE) &
+                    (distance_to_occupied <= distance)] = BUFFER
+
     def save(self, path):
-        if np.any(self.states > OCCUPIED):
+        if np.any(self.states > BUFFER):
             raise ValueError('grid contains reserved voxel states')
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -193,7 +206,7 @@ class VoxelGrid:
                     raise ValueError('saved map has nonzero unused bits')
             else:
                 raise ValueError(f'unsupported map format version: {version}')
-            if np.any(flat > OCCUPIED):
+            if np.any(flat > BUFFER):
                 raise ValueError('saved map contains reserved voxel states')
             return grid
 
@@ -271,11 +284,12 @@ def generate(config):
             generate_maze(grid, random_options['maze'], rng)
         if 'spheres' in random_options:
             generate_spheres(grid, random_options['spheres'], rng)
+    grid.add_buffer(config.get('buffer_distance', 0.0))
     return grid
 
 
 def publish(grid, topic):
-    if np.any(grid.states > OCCUPIED):
+    if np.any(grid.states > BUFFER):
         raise ValueError('grid contains reserved voxel states')
     import rclpy
     from hippo_maps.msg import OccupancyGrid3D

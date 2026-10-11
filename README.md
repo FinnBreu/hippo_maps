@@ -6,13 +6,17 @@ frame. `position_min` and `position_max` are ordered world-space bounds, and
 `(0, 0, 0)` to `(2, 4, -1.5)`, use bounds `(0, 0, -1.5)` and `(2, 4, 0)`.
 Each axis has `ceil((max - min) * resolution_per_meter)` cells. The byte index
 is `i = x + nx * (y + ny * z)`, with x varying fastest. The current codes are
-`UNKNOWN` (0), `FREE` (1), and `OCCUPIED` (2). Values 3 through 255 are
-reserved; generators and viewers reject them until their meaning is defined.
+`UNKNOWN` (0), `FREE` (1), `OCCUPIED` (2), and `BUFFER` (3). Values 4 through
+255 are reserved. Guidance can traverse only `FREE` voxels; buffer voxels block
+planning like occupied voxels.
 
 Generate a map from a JSON recipe. The [example recipe](config/occupancy_grid_example.json)
 defines walls and a hollow tube, plus seeded maze walls and random spheres.
-Shapes and `default_state` accept the names `unknown`, `free`, and `occupied`,
-or the integers 0, 1, and 2.
+Shapes and `default_state` accept the four state names or their integer codes.
+Set `buffer_distance` in metres in the recipe (zero by default) to mark free
+voxel centres within that Euclidean distance of an occupied voxel centre as
+`BUFFER`. The buffer is applied after all defined and random obstacles are
+placed. Unknown voxels remain unknown.
 
 ```sh
 ros2 run hippo_maps generate_occupancy_grid \
@@ -38,7 +42,8 @@ The Foxglove launcher in `tools` starts `hippo_maps`' occupancy grid bridge.
 It publishes `foxglove_msgs/msg/VoxelGrid` on `/pool/voxel_grid`. Both the
 bridge and local viewer read [voxel_colors.yaml](config/voxel_colors.yaml):
 each state has an RGB color, a Foxglove alpha byte, and a local viewer alpha
-fraction. The current palette makes free cells transparent in Foxglove;
+fraction. The buffer has a lighter color and lower alpha than occupied cells.
+The current palette makes free cells transparent in Foxglove;
 `--show-unknown` displays unknown cells in the local viewer. Enable the topic
 in Foxglove's 3D panel with **RGBA (separate fields)**. The bridge timestamps
 the Foxglove message with its own clock, matching the visualization session's
