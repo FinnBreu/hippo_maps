@@ -69,7 +69,8 @@ class OccupancyGridVisualizationTest(unittest.TestCase):
         np.testing.assert_array_equal(cells[:, 0], [0, 1, 2, 0])
         palette = load_colors()
         np.testing.assert_array_equal(cells[2, 1:4], palette[OCCUPIED][0])
-        np.testing.assert_array_equal(cells[:, 4], [0, 0, 150, 0])
+        np.testing.assert_array_equal(
+            cells[:, 4], [palette[state][1] for state in message.data])
 
     def test_custom_color_yaml(self):
         with tempfile.TemporaryDirectory() as directory:

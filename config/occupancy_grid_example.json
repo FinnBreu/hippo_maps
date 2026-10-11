@@ -2,26 +2,26 @@
   "frame_id": "map",
   "position_min": [0.0, 0.0, -1.5],
   "position_max": [2.0, 4.0, 0.0],
-  "resolution_per_meter": 20,
+  "resolution_per_meter": 40,
   "default_state": "free",
   "obstacles": [
     {
-      "type": "wall",
-      "position_min": [0.3, 0.8, -1.5],
-      "position_max": [0.4, 1.6, 0.0]
+      "type": "tube",
+      "center": [0.0, 3.5, -1.2],
+      "axis": [1.0, 0.0, 0.5],
+      "length": 1.5,
+      "inner_radius": 0.3,
+      "outer_radius": 0.4
     },
     {
-      "type": "tube",
-      "center": [1.25, 2.6, -0.75],
-      "axis": [1.0, 0.0, 0.0],
-      "length": 0.5,
-      "inner_radius": 0.12,
-      "outer_radius": 0.2
+      "type": "wall",
+      "position_min": [1.5, 1.0, -1.5],
+      "position_max": [2.0, 1.06, 0.0]
     }
   ],
   "random": {
-    "seed": 42,
-    "maze": {"wall_count": 3, "thickness": 0.06, "gap_width": 0.4},
-    "spheres": {"count": 20, "radius_min": 0.08, "radius_max": 0.18}
+    "seed": 19,
+    "maze": {"wall_count": 4, "thickness": 0.06, "gap_width": 0.5},
+    "spheres": {"count": 16, "radius_min": 0.08, "radius_max": 0.25}
   }
 }

@@ -3,13 +3,13 @@
 # view_occupancy_grid --show-unknown. Free cells are omitted by that viewer.
 unknown:
   rgb: [158, 158, 158]
-  foxglove_alpha: 0
-  viewer_alpha: 0.75
+  foxglove_alpha: 100
+  viewer_alpha: 0.4
 free:
   rgb: [0, 0, 0]
   foxglove_alpha: 0
   viewer_alpha: 0.0
 occupied:
-  rgb: [229, 57, 53]
+  rgb: [120, 80, 180]
   foxglove_alpha: 150
   viewer_alpha: 0.75

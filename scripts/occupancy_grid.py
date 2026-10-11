@@ -17,8 +17,11 @@ def load_colors(path=None):
         from ament_index_python.packages import get_package_share_directory
         path = Path(get_package_share_directory('hippo_maps')) / \
             'config' / 'voxel_colors.yaml'
-    with open(path, encoding='utf-8') as stream:
-        config = yaml.safe_load(stream)
+    try:
+        with open(path, encoding='utf-8') as stream:
+            config = yaml.safe_load(stream)
+    except yaml.YAMLError as error:
+        raise ValueError(f'invalid voxel color YAML: {error}') from error
     if not isinstance(config, dict) or set(config) != set(STATE_NAMES):
         raise ValueError('voxel colors must define unknown, free, and occupied')
     colors = {}

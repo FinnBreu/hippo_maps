@@ -38,6 +38,8 @@ The Foxglove launcher in `tools` starts `hippo_maps`' occupancy grid bridge.
 It publishes `foxglove_msgs/msg/VoxelGrid` on `/pool/voxel_grid`. Both the
 bridge and local viewer read [voxel_colors.yaml](config/voxel_colors.yaml):
 each state has an RGB color, a Foxglove alpha byte, and a local viewer alpha
-fraction. Free and unknown cells are transparent in Foxglove by default;
+fraction. The current palette makes free cells transparent in Foxglove;
 `--show-unknown` displays unknown cells in the local viewer. Enable the topic
-in Foxglove's 3D panel with **RGBA (separate fields)**.
+in Foxglove's 3D panel with **RGBA (separate fields)**. The bridge timestamps
+the Foxglove message with its own clock, matching the visualization session's
+wall or simulation time. It rereads the color file for each map update.

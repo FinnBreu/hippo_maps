@@ -53,7 +53,6 @@ def to_voxel_grid(message, colors=None):
 class OccupancyGridBridge(Node):
     def __init__(self, input_topic, output_topic):
         super().__init__('occupancy_grid_bridge')
-        self.colors = load_colors()
         qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.TRANSIENT_LOCAL)
         from foxglove_msgs.msg import VoxelGrid
@@ -63,10 +62,13 @@ class OccupancyGridBridge(Node):
 
     def on_grid(self, message):
         try:
-            grid = to_voxel_grid(message, self.colors)
-        except ValueError as error:
+            grid = to_voxel_grid(message, load_colors())
+        except (OSError, ValueError) as error:
             self.get_logger().error(f'Invalid occupancy grid: {error}')
             return
+        # The source map may use wall time while this viewer uses /clock.
+        # Use the bridge's clock so Foxglove can resolve the map frame now.
+        grid.timestamp = self.get_clock().now().to_msg()
         self.publisher.publish(grid)
         self.get_logger().info(f'Published {len(grid.data) // grid.cell_stride} voxels.')
 
