@@ -75,6 +75,28 @@ class OccupancyGridVisualizationTest(unittest.TestCase):
         np.testing.assert_array_equal(
             cells[:, 4], [palette[state][1] for state in message.data])
 
+    @unittest.skipUnless(importlib.util.find_spec('foxglove_msgs'),
+                         'foxglove_msgs is not installed')
+    def test_occupied_and_buffer_display_layers_are_separate(self):
+        message = OccupancyGrid3D()
+        message.position_max.x = 3
+        message.position_max.y = message.position_max.z = 1
+        message.resolution_per_meter = 1
+        message.data = [BUFFER, OCCUPIED, BUFFER]
+
+        occupied_grid = to_voxel_grid(message, visible_states=(OCCUPIED,))
+        buffer_grid = to_voxel_grid(message, visible_states=(BUFFER,))
+        occupied_alpha = np.frombuffer(occupied_grid.data, dtype=np.uint8) \
+            .reshape(3, 5)[:, 4]
+        buffer_alpha = np.frombuffer(buffer_grid.data, dtype=np.uint8) \
+            .reshape(3, 5)[:, 4]
+        palette = load_colors()
+        np.testing.assert_array_equal(occupied_alpha,
+                                      [0, palette[OCCUPIED][1], 0])
+        np.testing.assert_array_equal(buffer_alpha,
+                                      [palette[BUFFER][1], 0,
+                                       palette[BUFFER][1]])
+
     def test_custom_color_yaml(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'colors.yaml'

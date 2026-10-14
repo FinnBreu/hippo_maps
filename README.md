@@ -39,12 +39,15 @@ ros2 run hippo_maps view_occupancy_grid data/maps/pool_01.npz
 ```
 
 The Foxglove launcher in `tools` starts `hippo_maps`' occupancy grid bridge.
-It publishes `foxglove_msgs/msg/VoxelGrid` on `/pool/voxel_grid`. Both the
+It publishes occupied cells as `foxglove_msgs/msg/VoxelGrid` on
+`/pool/voxel_grid` and buffer cells on `/pool/buffer_voxel_grid`. Both the
 bridge and local viewer read [voxel_colors.yaml](config/voxel_colors.yaml):
 each state has an RGB color, a Foxglove alpha byte, and a local viewer alpha
 fraction. The buffer has a lighter color and lower alpha than occupied cells.
 The current palette makes free cells transparent in Foxglove;
-`--show-unknown` displays unknown cells in the local viewer. Enable the topic
-in Foxglove's 3D panel with **RGBA (separate fields)**. The bridge timestamps
-the Foxglove message with its own clock, matching the visualization session's
-wall or simulation time. It rereads the color file for each map update.
+`--show-unknown` displays unknown cells in the local viewer. Enable both topics
+in Foxglove's 3D panel with **RGBA (separate fields)**, then set **Draw behind**
+on `/pool/buffer_voxel_grid` so occupied cells remain visible through the buffer.
+The bridge timestamps both Foxglove messages with its own clock, matching the
+visualization session's wall or simulation time. It rereads the color file for
+each map update.

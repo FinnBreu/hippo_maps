@@ -1,18 +1,18 @@
 {
   "frame_id": "map",
   "position_min": [0.0, 0.0, -1.5],
-  "position_max": [2.0, 4.0, -0.2],
+  "position_max": [2.0, 4.0, 0.0],
   "resolution_per_meter": 40,
-  "buffer_distance": 0.15,
+  "buffer_distance": 0.17,
   "default_state": "free",
   "obstacles": [
     {
       "type": "tube",
-      "center": [0.0, 3.8, -1.2],
+      "center": [0.0, 3.7, -1.2],
       "axis": [1.0, 0.0, 0.5],
-      "length": 1.8,
-      "inner_radius": 0.35,
-      "outer_radius": 0.352
+      "length": 2.2,
+      "inner_radius": 0.4,
+      "outer_radius": 0.42
     },
     {
       "type": "wall",

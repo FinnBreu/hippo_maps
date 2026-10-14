@@ -8,10 +8,10 @@ import rclpy
 from hippo_maps.msg import OccupancyGrid3D
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from occupancy_grid import load_colors, unpack_message
+from occupancy_grid import BUFFER, OCCUPIED, load_colors, unpack_message
 
 
-def to_voxel_grid(message, colors=None):
+def to_voxel_grid(message, colors=None, visible_states=None):
     """Expand the planning grid into Foxglove's native cell format."""
     from foxglove_msgs.msg import PackedElementField, VoxelGrid
 
@@ -30,6 +30,8 @@ def to_voxel_grid(message, colors=None):
         cells['green'][mask] = rgb[1]
         cells['blue'][mask] = rgb[2]
         cells['alpha'][mask] = alpha
+    if visible_states is not None:
+        cells['alpha'][~np.isin(flat, visible_states)] = 0
 
     grid = VoxelGrid()
     grid.timestamp = message.header.stamp
@@ -51,39 +53,45 @@ def to_voxel_grid(message, colors=None):
 
 
 class OccupancyGridBridge(Node):
-    def __init__(self, input_topic, output_topic):
+    def __init__(self, input_topic, output_topic, buffer_topic):
         super().__init__('occupancy_grid_bridge')
         qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.TRANSIENT_LOCAL)
         from foxglove_msgs.msg import VoxelGrid
         self.publisher = self.create_publisher(VoxelGrid, output_topic, qos)
+        self.buffer_publisher = self.create_publisher(VoxelGrid, buffer_topic, qos)
         self.subscription = self.create_subscription(
             OccupancyGrid3D, input_topic, self.on_grid, qos)
 
     def on_grid(self, message):
         try:
-            grid = to_voxel_grid(message, load_colors())
+            colors = load_colors()
+            grid = to_voxel_grid(message, colors, (OCCUPIED,))
+            buffer_grid = to_voxel_grid(message, colors, (BUFFER,))
         except (OSError, ValueError) as error:
             self.get_logger().error(f'Invalid occupancy grid: {error}')
             return
         # The source map may use wall time while this viewer uses /clock.
         # Use the bridge's clock so Foxglove can resolve the map frame now.
-        grid.timestamp = self.get_clock().now().to_msg()
+        grid.timestamp = buffer_grid.timestamp = self.get_clock().now().to_msg()
         self.publisher.publish(grid)
-        self.get_logger().info(f'Published {len(grid.data) // grid.cell_stride} voxels.')
+        self.buffer_publisher.publish(buffer_grid)
+        self.get_logger().info(f'Published {len(grid.data) // grid.cell_stride} voxels in each display layer.')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--input-topic', default='/occupancy_grid_3d')
     parser.add_argument('--output-topic', default='/pool/voxel_grid')
+    parser.add_argument('--buffer-topic', default='/pool/buffer_voxel_grid')
     args, ros_args = parser.parse_known_args()
     try:
         import foxglove_msgs.msg  # noqa: F401
     except ImportError:
         parser.error('foxglove_msgs is required; install ros-jazzy-foxglove-msgs')
     rclpy.init(args=ros_args)
-    node = OccupancyGridBridge(args.input_topic, args.output_topic)
+    node = OccupancyGridBridge(args.input_topic, args.output_topic,
+                               args.buffer_topic)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
