@@ -3,8 +3,8 @@
 
 import argparse
 
-from occupancy_grid import (BUFFER, OCCUPIED, UNKNOWN, load_colors, load_npz,
-                            visible_voxels)
+from occupancy_grid import (BUFFER, OCCUPIED, UNKNOWN, bounds_edges,
+                            load_colors, load_npz, visible_voxels)
 
 
 def make_figure(path, show_unknown=False, max_points=40000):
@@ -26,6 +26,9 @@ def make_figure(path, show_unknown=False, max_points=40000):
         ax.scatter(centres[:, 0], centres[:, 1], centres[:, 2],
                    c=[display_color(code) for code in codes],
                    marker='s', s=12, depthshade=False, rasterized=True)
+    for start, end in bounds_edges(lower, upper):
+        ax.plot((start[0], end[0]), (start[1], end[1]),
+                (start[2], end[2]), color='#00bcd4', linewidth=1.4)
     ax.set(xlabel='x (m)', ylabel='y (m)', zlabel='z (m)',
            title=f'{path}  [{frame}]  {len(centres)} visible voxels')
     ax.set_xlim(lower[0], upper[0])

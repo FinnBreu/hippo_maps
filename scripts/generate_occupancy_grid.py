@@ -211,50 +211,194 @@ class VoxelGrid:
             return grid
 
 
-def generate_maze(grid, options, rng):
-    count = integer(options.get('wall_count', 0), 'maze.wall_count', True)
-    thickness = positive(options.get('thickness', 0.1), 'maze.thickness')
-    gap_width = positive(options.get('gap_width', 0.4), 'maze.gap_width')
-    regions = [(grid.position_min[0], grid.position_max[0],
-                grid.position_min[1], grid.position_max[1])]
-    for _ in range(count):
-        def split_axes(region):
-            width = region[1] - region[0]
-            height = region[3] - region[2]
-            x_ok = width > 2 * thickness + gap_width and \
-                height > gap_width + 2 * thickness
-            y_ok = height > 2 * thickness + gap_width and \
-                width > gap_width + 2 * thickness
-            return x_ok, y_ok
+def generate_depth_first(grid, options, rng):
+    """Carve a randomized depth-first spanning tree through XY cells."""
+    cell_size = positive(options.get('cell_size', 1.0), 'maze.cell_size')
+    thickness = positive(options.get('thickness', 0.03), 'maze.thickness')
+    span = grid.position_max[:2] - grid.position_min[:2]
+    columns, rows = np.maximum(1, np.floor(span / cell_size).astype(int))
+    pitch_x, pitch_y = span / [columns, rows]
+    if thickness >= min(pitch_x, pitch_y):
+        raise ValueError('maze.thickness must be smaller than each maze cell')
 
-        eligible = [r for r in regions if any(split_axes(r))]
-        if not eligible:
-            raise ValueError('maze bounds cannot fit the requested wall_count')
-        region = max(eligible, key=lambda r: (r[1]-r[0]) * (r[3]-r[2]))
-        regions.remove(region)
-        x0, x1, y0, y1 = region
-        x_ok, y_ok = split_axes(region)
-        split_x = x_ok and (not y_ok or x1 - x0 >= y1 - y0)
-        a0, a1 = (x0, x1) if split_x else (y0, y1)
-        b0, b1 = (y0, y1) if split_x else (x0, x1)
-        cut = rng.uniform(a0 + thickness, a1 - 2 * thickness)
-        gap = rng.uniform(b0 + thickness, b1 - gap_width - thickness)
-        for lo, hi in ((b0, gap), (gap + gap_width, b1)):
-            if split_x:
-                lower, upper = [cut, lo, grid.position_min[2]], \
-                               [cut + thickness, hi, grid.position_max[2]]
-            else:
-                lower, upper = [lo, cut, grid.position_min[2]], \
-                               [hi, cut + thickness, grid.position_max[2]]
-            if hi > lo:
+    visited = np.zeros((rows, columns), dtype=bool)
+    open_x = np.zeros((rows, max(columns - 1, 0)), dtype=bool)
+    open_y = np.zeros((max(rows - 1, 0), columns), dtype=bool)
+    start = (int(rng.integers(columns)), int(rng.integers(rows)))
+    visited[start[1], start[0]] = True
+    stack = [start]
+    while stack:
+        x, y = stack[-1]
+        neighbors = [(nx, ny) for nx, ny in
+                     ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1))
+                     if 0 <= nx < columns and 0 <= ny < rows and
+                     not visited[ny, nx]]
+        if not neighbors:
+            stack.pop()
+            continue
+        nx, ny = neighbors[int(rng.integers(len(neighbors)))]
+        if nx != x:
+            open_x[y, min(x, nx)] = True
+        else:
+            open_y[min(y, ny), x] = True
+        visited[ny, nx] = True
+        stack.append((nx, ny))
+
+    x0, y0, z0 = grid.position_min
+    z1 = grid.position_max[2]
+    for y in range(rows):
+        for x in range(columns - 1):
+            if not open_x[y, x]:
+                edge = x0 + (x + 1) * pitch_x
+                lower = [edge - thickness / 2, y0 + y * pitch_y, z0]
+                upper = [edge + thickness / 2, y0 + (y + 1) * pitch_y, z1]
                 grid.add_shape({'type': 'wall', 'position_min': lower,
                                 'position_max': upper})
-        if split_x:
-            regions.extend([(x0, cut, y0, y1),
-                            (cut + thickness, x1, y0, y1)])
+    for y in range(rows - 1):
+        for x in range(columns):
+            if not open_y[y, x]:
+                edge = y0 + (y + 1) * pitch_y
+                lower = [x0 + x * pitch_x, edge - thickness / 2, z0]
+                upper = [x0 + (x + 1) * pitch_x, edge + thickness / 2, z1]
+                grid.add_shape({'type': 'wall', 'position_min': lower,
+                                'position_max': upper})
+
+
+def generate_baffles(grid, options, rng):
+    """Place spaced crosswise walls with passages on alternating sides."""
+    count = integer(options.get('wall_count', 0), 'maze.wall_count', True)
+    thickness = positive(options.get('thickness', 0.03), 'maze.thickness')
+    passage_width = positive(options.get('passage_width', 0.9),
+                             'maze.passage_width')
+    min_spacing = positive(options.get('min_spacing', 0.8),
+                           'maze.min_spacing')
+    if min_spacing <= thickness:
+        raise ValueError('maze.min_spacing must exceed maze.thickness')
+    end_margin = positive(options.get('end_margin', 0.3),
+                          'maze.end_margin', True)
+    branch_count = integer(options.get('branch_count', 0),
+                           'maze.branch_count', True)
+    floating_count = integer(options.get('floating_count', 0),
+                             'maze.floating_count', True)
+    floating_clearance = positive(options.get('floating_clearance', 0.55),
+                                  'maze.floating_clearance')
+    switch_probability = options.get('switch_probability', 0.7)
+    if isinstance(switch_probability, bool) or not isinstance(
+            switch_probability, (int, float)) or not math.isfinite(
+            switch_probability) or not 0 <= switch_probability <= 1:
+        raise ValueError('maze.switch_probability must be between 0 and 1')
+    if count == 0:
+        return
+
+    size = grid.position_max - grid.position_min
+    along = int(np.argmax(size[:2]))
+    across = 1 - along
+    span = size[along]
+    width = size[across]
+    boundary_clearance = max(end_margin, 1.5 * min_spacing)
+    if width <= passage_width + thickness or \
+            span < 2 * boundary_clearance + thickness:
+        return
+    capacity = int(math.floor((span - 2 * boundary_clearance - thickness) /
+                              min_spacing)) + 1
+    count = min(count, capacity)
+    if width <= 2 * floating_clearance + thickness:
+        floating_count = 0
+    slack = span - 2 * boundary_clearance - thickness - \
+        (count - 1) * min_spacing
+    extra = rng.dirichlet(np.ones(count + 1)) * max(slack, 0)
+    cuts = [grid.position_min[along] + boundary_clearance + extra[0]]
+    for index in range(1, count):
+        cuts.append(cuts[-1] + min_spacing + extra[index])
+    floating_candidates = [index for index, cut in enumerate(cuts)
+                           if cut >= grid.position_min[along] +
+                           floating_clearance and cut + thickness <=
+                           grid.position_max[along] - floating_clearance]
+    floating_indices = set(rng.choice(
+        floating_candidates,
+        size=min(floating_count, len(floating_candidates)),
+        replace=False).tolist())
+    from_lower_side = bool(rng.integers(2))
+    wall_bounds = []
+    for index, cut in enumerate(cuts):
+        lower = grid.position_min.copy()
+        upper = grid.position_max.copy()
+        lower[along] = cut
+        upper[along] = cut + thickness
+        if index in floating_indices:
+            max_length = width - 2 * floating_clearance
+            length = rng.uniform(0.65 * max_length, max_length)
+            lower[across] = rng.uniform(
+                grid.position_min[across] + floating_clearance,
+                grid.position_max[across] - floating_clearance - length)
+            upper[across] = lower[across] + length
+        elif from_lower_side:
+            upper[across] = grid.position_max[across] - passage_width
         else:
-            regions.extend([(x0, x1, y0, cut),
-                            (x0, x1, cut + thickness, y1)])
+            lower[across] = grid.position_min[across] + passage_width
+        grid.add_shape({'type': 'wall', 'position_min': lower,
+                        'position_max': upper})
+        wall_bounds.append((lower, upper))
+        if index + 1 < count:
+            if rng.random() < switch_probability:
+                from_lower_side = not from_lower_side
+
+    # Branches may enter the end gaps as well as spaces between walls. A long
+    # wall can support two branches in one gap, separated across its length.
+    gaps = [(grid.position_min[along], cuts[0], None, 0)]
+    gaps.extend((wall_bounds[i][1][along], cuts[i + 1], i, i + 1)
+                for i in range(count - 1))
+    gaps.append((wall_bounds[-1][1][along], grid.position_max[along],
+                 count - 1, None))
+    min_branch_length = max(2 * thickness, 2.0 / grid.resolution_per_meter)
+    gap_candidates = []
+    for gap_start, gap_end, lower_index, upper_index in gaps:
+        max_length = min(0.65, gap_end - gap_start - min_spacing)
+        if max_length < min_branch_length:
+            continue
+        roots = []
+        for index, direction in ((lower_index, 1), (upper_index, -1)):
+            if index is not None and wall_bounds[index][1][across] - \
+                    wall_bounds[index][0][across] >= 0.3:
+                roots.append((index, direction))
+        if roots:
+            index, direction = roots[rng.integers(len(roots))]
+            body_length = (wall_bounds[index][1][across] -
+                           wall_bounds[index][0][across])
+            fractions = (0.2, 0.8) if body_length >= 1.0 else (0.5,)
+            gap_candidates.extend((max_length, index, direction, fraction)
+                                  for fraction in fractions)
+    for _ in range(min(branch_count, len(gap_candidates))):
+        weights = np.array([candidate[0] for candidate in gap_candidates])
+        choice = rng.choice(len(gap_candidates), p=weights / weights.sum())
+        max_length, index, direction, fraction = gap_candidates.pop(choice)
+        root_lower, root_upper = wall_bounds[index]
+        branch_lower = root_lower.copy()
+        branch_upper = root_upper.copy()
+        body_start = root_lower[across]
+        body_length = root_upper[across] - body_start
+        branch_lower[across] = body_start + fraction * body_length
+        branch_upper[across] = branch_lower[across] + thickness
+        length = rng.uniform(max(min_branch_length, 0.65 * max_length),
+                             max_length)
+        if direction > 0:
+            branch_lower[along] = root_upper[along]
+            branch_upper[along] = root_upper[along] + length
+        else:
+            branch_upper[along] = root_lower[along]
+            branch_lower[along] = root_lower[along] - length
+        grid.add_shape({'type': 'wall', 'position_min': branch_lower,
+                        'position_max': branch_upper})
+
+
+def generate_maze(grid, options, rng):
+    method = options.get('method', 'depth_first')
+    if method == 'depth_first':
+        generate_depth_first(grid, options, rng)
+    elif method == 'baffles':
+        generate_baffles(grid, options, rng)
+    else:
+        raise ValueError('maze.method must be depth_first or baffles')
 
 
 def generate_spheres(grid, options, rng):
@@ -279,11 +423,14 @@ def generate(config):
         grid.add_shape(shape)
     random_options = config.get('random', {})
     if random_options:
-        rng = np.random.default_rng(random_options.get('seed'))
+        maze_seed, sphere_seed = np.random.SeedSequence(
+            random_options.get('seed')).spawn(2)
         if 'maze' in random_options:
-            generate_maze(grid, random_options['maze'], rng)
+            generate_maze(grid, random_options['maze'],
+                          np.random.default_rng(maze_seed))
         if 'spheres' in random_options:
-            generate_spheres(grid, random_options['spheres'], rng)
+            generate_spheres(grid, random_options['spheres'],
+                             np.random.default_rng(sphere_seed))
     grid.add_buffer(config.get('buffer_distance', 0.0))
     return grid
 

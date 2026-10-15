@@ -105,6 +105,25 @@ def unpack_message(message):
     return unpack(lower, upper, message.resolution_per_meter, message.data)
 
 
+def bounds_edges(lower, upper):
+    """Return the twelve edges of an axis-aligned position bounding box."""
+    lower = np.asarray(lower, dtype=float)
+    upper = np.asarray(upper, dtype=float)
+    edges = []
+    for axis in range(3):
+        other_axes = [index for index in range(3) if index != axis]
+        for first in (0, 1):
+            for second in (0, 1):
+                start = lower.copy()
+                end = lower.copy()
+                for other_axis, side in zip(other_axes, (first, second)):
+                    start[other_axis] = end[other_axis] = \
+                        (lower, upper)[side][other_axis]
+                end[axis] = upper[axis]
+                edges.append((start, end))
+    return edges
+
+
 def visible_voxels(lower, upper, resolution, states, show_unknown=False,
                    max_points=None):
     """Return voxel centres and state codes; x varies fastest."""

@@ -1,0 +1,33 @@
+{
+  "frame_id": "map",
+  "position_min": [0.0, 0.0, -0.5],
+  "position_max": [6.0, 8.0, 0.0],
+  "resolution_per_meter": 40,
+  "buffer_distance": 0.17,
+  "default_state": "free",
+  "obstacles": [
+
+  ],
+  "random": {
+    "seed": 8,
+    "maze": {"method": "depth_first", "cell_size": 1.0,
+             "thickness": 0.05},
+    "spheres": {"count": 0, "radius_min": 0.05, "radius_max": 0.15}
+  },
+  "comment":[
+    {
+      "type": "wall",
+      "position_min": [1.4, 2.1, -1.5],
+      "position_max": [2.0, 2.12, 0.0]
+    },
+    {
+      "type": "tube",
+      "center": [1.7, 1.7, -1.5],
+      "axis": [0.0, 1.0, 1.0],
+      "length": 1.5,
+      "inner_radius": 0.4,
+      "outer_radius": 0.42
+    }
+
+  ]
+}

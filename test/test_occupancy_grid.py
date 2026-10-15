@@ -8,9 +8,9 @@ import numpy as np
 from hippo_maps.msg import OccupancyGrid3D
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from occupancy_grid import (BUFFER, OCCUPIED, load_colors, unpack_message,
-                            visible_voxels)
-from occupancy_grid_bridge import to_voxel_grid
+from occupancy_grid import (BUFFER, OCCUPIED, bounds_edges, load_colors,
+                            unpack_message, visible_voxels)
+from occupancy_grid_bridge import to_bounds_scene, to_voxel_grid
 
 
 class OccupancyGridVisualizationTest(unittest.TestCase):
@@ -46,6 +46,66 @@ class OccupancyGridVisualizationTest(unittest.TestCase):
         message.data = [4]
         with self.assertRaisesRegex(ValueError, 'reserved'):
             unpack_message(message)
+
+    def test_position_bounds_have_twelve_unique_edges(self):
+        lower = np.array([-1.0, 2.0, -3.0])
+        upper = np.array([1.0, 5.0, 0.0])
+        edges = bounds_edges(lower, upper)
+        self.assertEqual(len(edges), 12)
+        segments = set()
+        corners = set()
+        for start, end in edges:
+            first, second = tuple(start), tuple(end)
+            segments.add((first, second))
+            corners.update((first, second))
+            self.assertEqual(np.count_nonzero(start != end), 1)
+        self.assertEqual(len(segments), 12)
+        self.assertEqual(len(corners), 8)
+
+    @unittest.skipUnless(importlib.util.find_spec('foxglove_msgs'),
+                         'foxglove_msgs is not installed')
+    def test_foxglove_position_bounds_are_lines(self):
+        from foxglove_msgs.msg import LinePrimitive
+
+        message = OccupancyGrid3D()
+        message.header.frame_id = 'map'
+        message.position_min.x = -1.0
+        message.position_min.z = -2.0
+        message.position_max.x = 1.0
+        message.position_max.y = 3.0
+        message.position_max.z = 0.0
+        message.resolution_per_meter = 1
+        message.data = [1] * 12
+        scene = to_bounds_scene(message)
+        self.assertEqual(len(scene.entities), 1)
+        entity = scene.entities[0]
+        self.assertEqual((entity.frame_id, entity.id),
+                         ('map', 'position_bounds'))
+        self.assertEqual(len(entity.lines), 1)
+        line = entity.lines[0]
+        self.assertEqual(line.type, LinePrimitive.LINE_LIST)
+        self.assertTrue(line.scale_invariant)
+        self.assertEqual(len(line.points), 24)
+        self.assertEqual(len(entity.cubes), 0)
+
+    def test_local_viewer_draws_position_edges(self):
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from view_occupancy_grid import make_figure
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'map.npz'
+            np.savez_compressed(path, position_min=[0, 0, -1],
+                                position_max=[2, 3, 0],
+                                resolution_per_meter=1,
+                                frame_id='map', format_version=2,
+                                data=np.ones(6, dtype=np.uint8))
+            figure = make_figure(path)
+            try:
+                self.assertEqual(len(figure.axes[0].lines), 12)
+            finally:
+                plt.close(figure)
 
     @unittest.skipUnless(importlib.util.find_spec('foxglove_msgs'),
                          'foxglove_msgs is not installed')

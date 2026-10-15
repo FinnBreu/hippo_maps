@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish an occupancy map as foxglove_msgs/msg/VoxelGrid."""
+"""Publish an occupancy map as Foxglove voxels and a bounds wireframe."""
 
 import argparse
 
@@ -8,7 +8,8 @@ import rclpy
 from hippo_maps.msg import OccupancyGrid3D
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from occupancy_grid import BUFFER, OCCUPIED, load_colors, unpack_message
+from occupancy_grid import (BUFFER, OCCUPIED, bounds_edges, load_colors,
+                            unpack_message)
 
 
 def to_voxel_grid(message, colors=None, visible_states=None):
@@ -52,14 +53,39 @@ def to_voxel_grid(message, colors=None, visible_states=None):
     return grid
 
 
+def to_bounds_scene(message):
+    """Draw the exact position bounds as twelve independent line segments."""
+    from foxglove_msgs.msg import Color, LinePrimitive, SceneEntity, SceneUpdate
+    from geometry_msgs.msg import Point
+
+    lower, upper, _, _ = unpack_message(message)
+    points = [Point(x=float(value[0]), y=float(value[1]), z=float(value[2]))
+              for edge in bounds_edges(lower, upper) for value in edge]
+    line = LinePrimitive()
+    line.type = LinePrimitive.LINE_LIST
+    line.pose.orientation.w = 1.0
+    line.thickness = 2.0
+    line.scale_invariant = True
+    line.color = Color(r=0.0, g=0.75, b=0.85, a=1.0)
+    line.points = points
+    entity = SceneEntity()
+    entity.timestamp = message.header.stamp
+    entity.frame_id = message.header.frame_id
+    entity.id = 'position_bounds'
+    entity.lines = [line]
+    return SceneUpdate(entities=[entity])
+
+
 class OccupancyGridBridge(Node):
-    def __init__(self, input_topic, output_topic, buffer_topic):
+    def __init__(self, input_topic, output_topic, buffer_topic, bounds_topic):
         super().__init__('occupancy_grid_bridge')
         qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        from foxglove_msgs.msg import VoxelGrid
+        from foxglove_msgs.msg import SceneUpdate, VoxelGrid
         self.publisher = self.create_publisher(VoxelGrid, output_topic, qos)
         self.buffer_publisher = self.create_publisher(VoxelGrid, buffer_topic, qos)
+        self.bounds_publisher = self.create_publisher(SceneUpdate, bounds_topic,
+                                                      qos)
         self.subscription = self.create_subscription(
             OccupancyGrid3D, input_topic, self.on_grid, qos)
 
@@ -68,14 +94,18 @@ class OccupancyGridBridge(Node):
             colors = load_colors()
             grid = to_voxel_grid(message, colors, (OCCUPIED,))
             buffer_grid = to_voxel_grid(message, colors, (BUFFER,))
+            bounds_scene = to_bounds_scene(message)
         except (OSError, ValueError) as error:
             self.get_logger().error(f'Invalid occupancy grid: {error}')
             return
         # The source map may use wall time while this viewer uses /clock.
         # Use the bridge's clock so Foxglove can resolve the map frame now.
-        grid.timestamp = buffer_grid.timestamp = self.get_clock().now().to_msg()
+        timestamp = self.get_clock().now().to_msg()
+        grid.timestamp = buffer_grid.timestamp = timestamp
+        bounds_scene.entities[0].timestamp = timestamp
         self.publisher.publish(grid)
         self.buffer_publisher.publish(buffer_grid)
+        self.bounds_publisher.publish(bounds_scene)
         self.get_logger().info(f'Published {len(grid.data) // grid.cell_stride} voxels in each display layer.')
 
 
@@ -84,6 +114,7 @@ def main():
     parser.add_argument('--input-topic', default='/occupancy_grid_3d')
     parser.add_argument('--output-topic', default='/pool/voxel_grid')
     parser.add_argument('--buffer-topic', default='/pool/buffer_voxel_grid')
+    parser.add_argument('--bounds-topic', default='/pool/position_bounds')
     args, ros_args = parser.parse_known_args()
     try:
         import foxglove_msgs.msg  # noqa: F401
@@ -91,7 +122,7 @@ def main():
         parser.error('foxglove_msgs is required; install ros-jazzy-foxglove-msgs')
     rclpy.init(args=ros_args)
     node = OccupancyGridBridge(args.input_topic, args.output_topic,
-                               args.buffer_topic)
+                               args.buffer_topic, args.bounds_topic)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
