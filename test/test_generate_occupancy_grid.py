@@ -238,10 +238,8 @@ class OccupancyGridGeneratorTest(unittest.TestCase):
                             main[-1]['position_max'][1]
                             for branch in branches))
         for branch in branches:
-            self.assertGreaterEqual(branch['position_min'][1], 0.6)
-            self.assertLessEqual(branch['position_max'][1], 3.4)
-        self.assertTrue(any(branch['position_min'][1] < 0.9
-                            for branch in branches))
+            self.assertGreaterEqual(branch['position_min'][1], 0.9)
+            self.assertLessEqual(branch['position_max'][1], 3.1)
         grid.add_buffer(0.17)
         _, components = label(grid.states[10] == maps.FREE,
                               structure=[[0, 1, 0],
@@ -274,6 +272,43 @@ class OccupancyGridGeneratorTest(unittest.TestCase):
             config['random']['maze']['wall_count'] = 4
             maps.generate(config)
             self.assertEqual(placed, first)
+
+    def test_maze_and_spheres_use_separate_explicit_seeds(self):
+        config = {'position_min': [0, 0, 0], 'position_max': [4, 4, 1],
+                  'resolution_per_meter': 10,
+                  'random': {'maze': {'method': 'depth_first', 'seed': 11,
+                                     'cell_size': 1, 'thickness': 0.05},
+                             'spheres': {'seed': 22, 'count': 3,
+                                         'radius_min': 0.05,
+                                         'radius_max': 0.15}}}
+        original = maps.VoxelGrid.add_shape
+        placed = {'wall': [], 'sphere': []}
+
+        def record(grid, shape):
+            if shape['type'] == 'wall':
+                placed['wall'].append((tuple(shape['position_min']),
+                                       tuple(shape['position_max'])))
+            elif shape['type'] == 'sphere':
+                placed['sphere'].append((tuple(shape['center']),
+                                         shape['radius']))
+            original(grid, shape)
+
+        def layout():
+            placed['wall'].clear()
+            placed['sphere'].clear()
+            maps.generate(config)
+            return placed['wall'].copy(), placed['sphere'].copy()
+
+        with patch.object(maps.VoxelGrid, 'add_shape', record):
+            walls, spheres = layout()
+            config['random']['maze']['seed'] = 12
+            new_walls, same_spheres = layout()
+            self.assertNotEqual(new_walls, walls)
+            self.assertEqual(same_spheres, spheres)
+            config['random']['spheres']['seed'] = 23
+            same_walls, new_spheres = layout()
+            self.assertEqual(same_walls, new_walls)
+            self.assertNotEqual(new_spheres, spheres)
 
     def test_buffer_expands_obstacles_by_configured_distance(self):
         config = {'position_min': [0, 0, 0],

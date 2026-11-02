@@ -2,15 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(hippo_maps)
 
 find_package(ament_cmake REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
-
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/OccupancyGrid3D.msg"
-  DEPENDENCIES std_msgs geometry_msgs
-)
-ament_export_dependencies(rosidl_default_runtime)
+find_package(hippo_guidance_msgs REQUIRED)
 
 install(PROGRAMS scripts/generate_occupancy_grid.py
   DESTINATION lib/${PROJECT_NAME}
@@ -39,8 +31,6 @@ if(BUILD_TESTING)
   add_test(NAME test_occupancy_grid
     COMMAND "${Python3_EXECUTABLE}"
       "${CMAKE_CURRENT_SOURCE_DIR}/test/test_occupancy_grid.py")
-  set_tests_properties(test_occupancy_grid PROPERTIES
-    ENVIRONMENT "PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_py:$ENV{PYTHONPATH}")
 endif()
 
 ament_package()

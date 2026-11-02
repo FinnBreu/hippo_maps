@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-from hippo_maps.msg import OccupancyGrid3D
+from hippo_guidance_msgs.msg import OccupancyGrid3D
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from occupancy_grid import (BUFFER, OCCUPIED, bounds_edges, load_colors,

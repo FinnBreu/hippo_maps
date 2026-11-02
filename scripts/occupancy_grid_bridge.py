@@ -5,7 +5,7 @@ import argparse
 
 import numpy as np
 import rclpy
-from hippo_maps.msg import OccupancyGrid3D
+from hippo_guidance_msgs.msg import OccupancyGrid3D
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from occupancy_grid import (BUFFER, OCCUPIED, bounds_edges, load_colors,

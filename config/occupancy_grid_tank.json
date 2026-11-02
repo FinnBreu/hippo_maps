@@ -9,12 +9,10 @@
 
   ],
   "random": {
-    "seed": 1,
-    "maze": {"method": "baffles", "wall_count": 3, "thickness": 0.05,
-             "passage_width": 0.8, "min_spacing": 0.6, "end_margin": 0.6,
-             "branch_count": 0, "floating_count": 1,
-             "floating_clearance": 0.6},
-    "spheres": {"count": 15, "radius_min": 0.05, "radius_max": 0.20}
+    "maze": {"seed": 0, "method": "depth_first", "cell_size": 0.7,
+             "thickness": 0.05},
+    "spheres": {"seed": 0, "count": 0, "radius_min": 0.1,
+                "radius_max": 0.20}
   },
   "comment":[
     {
@@ -22,6 +20,11 @@
       "position_min": [1.4, 2.1, -1.5],
       "position_max": [2.0, 2.12, 0.0]
     },
+    {"maze": {"seed": 22, "method": "baffles", "wall_count": 3, "thickness": 0.05,
+             "passage_width": 0.8, "min_spacing": 0.6, "end_margin": 0.2,
+             "branch_count": 2, "floating_count": 1,
+             "floating_clearance": 0.6}
+   },        
     {
       "type": "tube",
       "center": [1.7, 1.7, -1.5],

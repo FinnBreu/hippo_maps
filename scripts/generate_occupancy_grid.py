@@ -353,7 +353,9 @@ def generate_baffles(grid, options, rng):
     min_branch_length = max(2 * thickness, 2.0 / grid.resolution_per_meter)
     gap_candidates = []
     for gap_start, gap_end, lower_index, upper_index in gaps:
-        max_length = min(0.65, gap_end - gap_start - min_spacing)
+        clearance = (boundary_clearance if lower_index is None or
+                     upper_index is None else min_spacing)
+        max_length = min(0.65, gap_end - gap_start - clearance)
         if max_length < min_branch_length:
             continue
         roots = []
@@ -423,14 +425,16 @@ def generate(config):
         grid.add_shape(shape)
     random_options = config.get('random', {})
     if random_options:
-        maze_seed, sphere_seed = np.random.SeedSequence(
+        default_maze_seed, default_sphere_seed = np.random.SeedSequence(
             random_options.get('seed')).spawn(2)
         if 'maze' in random_options:
-            generate_maze(grid, random_options['maze'],
-                          np.random.default_rng(maze_seed))
+            maze_options = random_options['maze']
+            generate_maze(grid, maze_options, np.random.default_rng(
+                maze_options.get('seed', default_maze_seed)))
         if 'spheres' in random_options:
-            generate_spheres(grid, random_options['spheres'],
-                             np.random.default_rng(sphere_seed))
+            sphere_options = random_options['spheres']
+            generate_spheres(grid, sphere_options, np.random.default_rng(
+                sphere_options.get('seed', default_sphere_seed)))
     grid.add_buffer(config.get('buffer_distance', 0.0))
     return grid
 
@@ -439,7 +443,7 @@ def publish(grid, topic):
     if np.any(grid.states > BUFFER):
         raise ValueError('grid contains reserved voxel states')
     import rclpy
-    from hippo_maps.msg import OccupancyGrid3D
+    from hippo_guidance_msgs.msg import OccupancyGrid3D
     from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
     rclpy.init()
@@ -458,6 +462,21 @@ def publish(grid, topic):
     message.data = grid.states.ravel().tolist()
     publisher.publish(message)
     node.get_logger().info(f'Published {grid.states.size} voxels on {topic}.')
+    subscriber_count = 0
+
+    def publish_for_new_subscribers():
+        nonlocal subscriber_count
+        count = publisher.get_subscription_count()
+        if count > subscriber_count:
+            # A large transient-local sample can be missed by a late joiner.
+            # Send it again after DDS reports the new subscription as matched.
+            publisher.publish(message)
+            node.get_logger().info(
+                f'Republished occupancy grid for {count - subscriber_count} '
+                'new subscriber(s).')
+        subscriber_count = count
+
+    node.create_timer(0.5, publish_for_new_subscribers)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

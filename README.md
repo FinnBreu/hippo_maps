@@ -1,6 +1,6 @@
 # hippo_maps
 
-`hippo_maps/msg/OccupancyGrid3D` carries an axis-aligned grid in the header
+`hippo_guidance_msgs/msg/OccupancyGrid3D` carries an axis-aligned grid in the header
 frame. `position_min` and `position_max` are ordered world-space bounds, and
 `resolution_per_meter` sets a uniform voxel size. For the space from
 `(0, 0, 0)` to `(2, 4, -1.5)`, use bounds `(0, 0, -1.5)` and `(2, 4, 0)`.
@@ -20,8 +20,8 @@ position boundary stays at least `1.5 * min_spacing` from that boundary;
 `passage_width` is the clear gap before voxelization and buffering, and
 `thickness` sets wall thickness. `branch_count` adds short perpendicular
 branches, including branches into the end gaps. Two branches may grow from a
-long wall; each branch tip stays at least `min_spacing` from a parallel box
-boundary. `floating_count` selects walls that stay
+long wall; branch tips in the end gaps use the same boundary clearance as the
+main walls. `floating_count` selects walls that stay
 clear of the four horizontal position bounds while spanning the full map
 height. `floating_clearance` controls clearance from the sides and ends; set
 it beyond the buffer distance to keep the visible buffer clear of those sides.
@@ -34,11 +34,12 @@ The [maze recipe](config/occupancy_grid_maze.json) uses
 an XY cell lattice, leaving walls between cells that the path did not join.
 `cell_size` sets the target cell pitch in metres; the map is divided into whole
 cells of at least that size. `thickness` sets the full-height wall thickness.
-The outer position bounds are not filled with walls. Both methods use a
-separate random stream from spheres, so changing maze settings does not move
-random spheres when the seed stays the same.
+The outer position bounds are not filled with walls. Set `seed` inside
+`random.maze` and `random.spheres` to change either layout independently.
+The older shared `random.seed` still supplies separate derived seeds when a
+section has no seed of its own.
 After changing the generator script, run
-`colcon build --packages-select hippo_maps` from the workspace root before
+`colcon build --packages-up-to hippo_maps` from the workspace root before
 using `ros2 run`; ROS executes the installed copy of the script.
 Shapes and `default_state` accept the four state names or their integer codes.
 Set `buffer_distance` in metres in the recipe (zero by default) to mark free
@@ -56,9 +57,11 @@ ros2 run hippo_maps generate_occupancy_grid \
 
 New `.npz` files contain one byte per voxel and a format version. Older
 packed `.npz` maps remain readable and can be resaved in the new format.
-`--publish` sends `hippo_maps/msg/OccupancyGrid3D` on `/occupancy_grid_3d`
+`--publish` sends `hippo_guidance_msgs/msg/OccupancyGrid3D` on `/occupancy_grid_3d`
 with reliable, transient-local QoS and keeps the publisher alive for late
-subscribers.
+subscribers. It republishes the same map when a new subscriber joins so large
+maps also reach late subscribers on DDS implementations that miss the cached
+sample.
 
 For a movable local 3D view, run:
 
