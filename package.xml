@@ -9,8 +9,11 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>hippo_guidance_msgs</depend>
+  <depend>ament_index_cpp</depend>
+  <depend>rclcpp</depend>
+  <depend>yaml-cpp</depend>
   <exec_depend>rclpy</exec_depend>
-  <exec_depend>foxglove_msgs</exec_depend>
+  <depend>foxglove_msgs</depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-scipy</exec_depend>
   <exec_depend>python3-matplotlib</exec_depend>
